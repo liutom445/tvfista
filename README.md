@@ -132,7 +132,7 @@ For spatial transcriptomics researchers unfamiliar with optimization, **FISTA** 
 - **Convergence**: Provable $O(1/k^2)$ rate with momentum
 - **Flexibility**: Easy to modify objective (change TV norm, add constraints)
 
-The soft-$\ell_1$ smoothing ($\sqrt{u^2 + \delta}$ instead of $|u|$) makes the TV penalty differentiable while preserving edge-preserving properties.
+The soft- $\ell_1$ smoothing ($\sqrt{u^2 + \delta}$ instead of $|u|$) makes the TV penalty differentiable while preserving edge-preserving properties.
 
 ## Extensions
 
