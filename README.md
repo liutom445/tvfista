@@ -83,7 +83,7 @@ $$
 where the proximal operator is defined as:
 
 $$
-\text{prox}_{\eta g}(y) = \arg\min_{x} \left\{ g(x) + \frac{1}{2\eta} \|x - y\|^2 \right\}
+\text{prox}_{\eta g}(y) = \arg\min_{x} \left \{ g(x) + \frac{1}{2\eta} \|x - y\|^2 \right \}
 $$
 
 **Intuition**: We take a gradient step on the smooth part $f$, then "project" back onto the constraint set via the proximal operator. For our simplex constraint, this projection can be computed efficiently in $O(D \log D)$ time using sorting.
