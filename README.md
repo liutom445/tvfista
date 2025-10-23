@@ -142,7 +142,7 @@ where $L$ is the Lipschitz constant of $\nabla f$.
 For our problem, the proximal operator is:
 
 $$
-\text{prox}_{\eta g}(Y) = \arg\min_{X} \left\{ \iota_{\mathcal{C}}(X) + \frac{1}{2\eta} \|X - Y\|_F^2 \right\}
+\text{prox}_{\eta g}(Y) = \arg\min_{X} \left[ \iota_{\mathcal{C}}(X) + \frac{1}{2\eta} \|X - Y\|_F^2 \right]
 $$
 
 This is equivalent to projecting each row of $Y$ onto the simplex. For a single row $y \in \mathbb{R}^D$:
