@@ -1,9 +1,3 @@
----
-title: "Total-Variation Optimization on Spatial Transcriptomics Data"
-author: "Tom Liu"
-date: "October 2025"
----
-
 # Total-Variation Optimization on Spatial Transcriptomics Data
 
 ## Introduction: From Cell-Type Scores to Spatial Mixtures
