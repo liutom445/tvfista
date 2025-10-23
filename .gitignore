@@ -1,0 +1,105 @@
+# R specific
+.Rhistory
+.RData
+.Rproj.user
+.Rproj
+*.Rproj
+
+# R temporary files
+.RDataTmp
+*.rds
+*.Rds
+
+# Output files
+analysis/outputs/*
+!analysis/outputs/.gitkeep
+
+# Compiled files
+*.o
+*.so
+*.dll
+*.exe
+src/*.o
+src/*.so
+
+# RcppExports (auto-generated)
+src/RcppExports.cpp
+R/RcppExports.R
+
+# Build directories
+build/
+bin/
+cmake-build-*/
+
+# Generated documentation
+docs/*.html
+docs/*.pdf
+*.html
+*.pdf
+*.tex
+*.log
+*.aux
+
+# Data files (large)
+data/raw/*.csv
+!data/raw/.gitkeep
+data/processed/
+*.h5
+*.h5ad
+
+# Results and caches
+*.cache
+.cache/
+results/
+cache/
+
+# IDE specific
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS specific
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Python (if any)
+__pycache__/
+*.py[cod]
+*$py.class
+.ipynb_checkpoints/
+
+# MATLAB temporary
+*.asv
+*.m~
+
+# Profiling
+Rprof.out
+profile.out
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Package builds
+*.tar.gz
+*.zip
+
+# LaTeX intermediate files
+*.bbl
+*.blg
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+
+# Comparison/test outputs
+comparison*.csv
+comparison*.html
+fista_result*.csv
+cvx_result*.csv
+*_before_*.csv
+comparison_summary.csv
+matlab_res/
