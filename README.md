@@ -37,7 +37,7 @@ where $z_i = \sum_{k=1}^K S_{ik} (XB^{\top})_{ik}$ represents the evidence at sp
 ### Why This Formulation?
 
 1. **Negative log-likelihood term**: Ensures the low-rank factorization $XB^{\top}$ remains consistent with the input scores $S$
-2. **Soft-$\ell_1$ TV penalty**: Promotes spatial smoothness while preserving sharp boundaries ($\sqrt{u^2 + \delta}$ is differentiable unlike $|u|$)
+2. **Soft-l1 TV penalty**: Promotes spatial smoothness while preserving sharp boundaries ($\sqrt{u^2 + \delta}$ is differentiable unlike $|u|$)
 3. **Learned edge weights** ($w$): Allows the model to down-weight edges crossing true tissue boundaries
 4. **Low-rank constraint**: Reduces $D \times (N+K)$ parameters vs $K \times N$ for full deconvolution, providing regularization and interpretability
 
