@@ -70,15 +70,15 @@ In our case:
 
 Before understanding FISTA, let's review **proximal gradient descent**. For unconstrained smooth problems, gradient descent updates:
 
-$$
+\[
 x^{k+1} = x^k - \eta \nabla f(x^k)
-$$
+\]
 
 But with constraints or non-smooth terms, we use the **proximal operator**:
 
-$$
+\[
 x^{k+1} = \text{prox}_{\eta g}(x^k - \eta \nabla f(x^k))
-$$
+\]
 
 where the proximal operator is defined as:
 
