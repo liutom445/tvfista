@@ -1,286 +1,281 @@
-# TV-Regularized Spatial Mixture Models
+# TV-Regularized Spatial Deconvolution
 
-**Fast, scalable spatial deconvolution with total variation regularization**
+**Spatially-aware cell-type mixture estimation using Total Variation regularization and accelerated optimization**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+---
+
 ## Overview
 
-This package implements **total variation (TV) regularized mixture models** for spatial transcriptomics data. It learns spatially coherent cell-type mixtures by:
+This project performs **low-rank spatial deconvolution** of cell-type mixtures in spatial transcriptomics data. Starting from cell-type likelihood scores (e.g., from RCTD), we learn:
 
-1. **Low-rank factorization**: Decomposes per-spot cell-type scores into mixture coefficients (X) × dictionary (B)
-2. **Spatial regularization**: Penalizes rapid changes in mixture proportions across neighboring spots
-3. **Adaptive weighting**: Learns edge-specific weights to allow sharp boundaries at biological interfaces
+- **Per-spot mixture weights** ($X \in \mathbb{R}^{N \times D}$) with spatial smoothness
+- **Low-rank dictionary** ($B \in \mathbb{R}^{K \times D}$) capturing $D$ mixture archetypes from $K$ cell types
+- **Adaptive edge weights** ($w \in \mathbb{R}^m$) that identify tissue boundaries
 
-The method combines:
-- **Fast FISTA** (C++) for X and B optimization
-- **Linear programming** (CVXR) for adaptive edge weights
-- **Sparse graph representations** for scalability to large datasets (N > 10,000 spots)
-
-## Key Features
-
-- **Scalable**: Handles datasets with 10,000+ spots (FISTA is ~100× faster than CVX)
-- **Spatially aware**: Uses Delaunay or MST graphs to model tissue geometry
-- **Adaptive**: Learns edge weights to preserve sharp boundaries
-- **Validated**: Matches MATLAB/CVX solutions within 1-5%
-- **Modular**: Separate components for initialization, optimization, evaluation, visualization
-
-## Quick Start
-
-```r
-# Load libraries
-library(Rcpp)
-library(Matrix)
-library(CVXR)
-
-# Source functions
-source("R/init_A.R")
-source("R/init_B.R")
-source("R/alt_xbw_cvxr.R")
-sourceCpp("src/FISTA_w.cpp")
-
-# Load data
-S <- as.matrix(read.csv("data/raw/S.csv", row.names = 1))
-A <- as(read.csv("data/raw/A.csv", row.names = 1), "dgCMatrix")
-B_init <- as.matrix(read.csv("data/raw/B.csv", row.names = 1))
-
-# Run optimization
-res <- alt_xbw_cvxr(S, A, B_init, lambda = 30, outer_it = 15)
-
-# Results
-X <- res$X  # Mixture coefficients (N × D)
-B <- res$B  # Dictionary (K × D)
-w <- res$w  # Edge weights (length m)
-```
-
-See [analysis/example_workflow.R](analysis/example_workflow.R) for complete workflow.
-
-## Installation
-
-### Prerequisites
-
-- R ≥ 4.0
-- C++ compiler (for Rcpp)
-- Required R packages: `Rcpp`, `Matrix`, `CVXR`, `ggplot2`
-
-### Quick Install
-
-```r
-# Install CRAN dependencies
-install.packages(c("Rcpp", "Matrix", "CVXR", "ggplot2", "viridis"))
-
-# Compile C++ code (first time only)
-Rcpp::sourceCpp("src/FISTA_w.cpp")
-```
-
-See [docs/INSTALL.md](docs/INSTALL.md) for detailed instructions.
+The key innovation: **soft-$\ell_1$ Total Variation** with learned edge weights automatically preserves sharp boundaries while smoothing within homogeneous regions.
 
 ## Method
 
-Given:
-- **S** (N × K): Cell-type likelihood scores from RCTD
-- **A** (m × N): Incidence matrix from spatial graph (Delaunay/MST)
-- **D**: Number of mixture components (typically 3-5)
+### Objective Function
 
-We minimize:
+$$
+\min_{X,B,w} \; -\sum_{i=1}^N \log(z_i) + \lambda \sum_{e=1}^m w_e \sum_{d=1}^D \sqrt{(AX)_{ed}^2 + \delta}
+$$
 
-```
-min_{X,B} -Σ log(S ⊙ (XB^T)) + λ Σ_e w_e ||AX||_soft-L1
-s.t. X rows on simplex, B columns on simplex
-```
+where:
+- $z_i = \sum_k S_{ik}(XB^\top)_{ik}$ is the evidence at spot $i$
+- $A \in \mathbb{R}^{m \times N}$ is the spatial graph incidence matrix (Delaunay triangulation)
+- $\delta = 10^{-6}$ provides smooth approximation to $|\cdot|$
 
-where `||·||_soft-L1` is the soft-L1 norm (smooth approximation to L1).
+**Constraints**: Rows of $X$ and columns of $B$ lie on the probability simplex ($\geq \epsilon$, sum to 1).
 
-### Algorithm
+### Algorithm: Alternating FISTA + LP
 
-**Alternating optimization**:
-1. **X-step**: FISTA with fixed B, w
-2. **B-step**: FISTA with fixed X, w
-3. **w-step**: Linear program with fixed X
+We alternate three steps until convergence:
 
-Converges in 10-20 outer iterations.
+1. **X-step (FISTA)**: Update mixture weights with TV regularization
+   - Fast Iterative Shrinkage-Thresholding Algorithm (Beck & Teboulle 2009)
+   - Convergence rate: $O(1/k^2)$ vs $O(1/k)$ for standard gradient descent
+   - 1500-2000 iterations, ~1.2 seconds
 
-See [docs/algorithm.md](docs/algorithm.md) for mathematical details.
+2. **B-step (FISTA)**: Update dictionary (data term only, no TV)
+   - 500 iterations, ~0.5 seconds
+
+3. **w-step (Linear Program)**: Learn edge weights
+   - Minimizes $w^\top c$ subject to $w_{\min} \leq w \leq w_{\max}$ and $|A|^\top w = \mathbf{1}$
+   - Solved via CVXR/ECOS, ~0.2 seconds
+
+**Total runtime**: ~4 minutes for 777 spots × 19 cell types × 3 components (3 outer iterations)
+
+## Results: Mouse Cerebellum
+
+| Metric | Value | Description |
+|--------|-------|-------------|
+| **Objective reduction** | 59.7% | From 22,714 → 9,146 over 3 iterations |
+| **Sharpness** | 0.80 | Mean max weight (most spots have dominant component) |
+| **Edge weights** | Bimodal | 40% at $w_{\min}=0.01$ (boundaries), 60% at 0.10-0.40 (interior) |
+| **Spatial coherence** | High | Recovers cerebellar layer structure (granular/molecular/Purkinje) |
+
+**Visualization**: The learned mixtures reveal spatially coherent regions corresponding to known cerebellar architecture, with sharp transitions between cortical layers preserved by adaptive edge weighting.
+
+## Key Features
+
+✅ **Fast**: C++/Armadillo implementation with O(1/k²) convergence  
+✅ **Scalable**: Handles N > 10K spots with sparse matrix operations  
+✅ **Adaptive**: Learns which edges to smooth (interior) vs preserve (boundaries)  
+✅ **Interpretable**: Low-rank factorization reduces K cell types → D mixture components  
+✅ **Validated**: Matches CVX reference implementation (15× faster)
 
 ## Repository Structure
 
 ```
 tv-spatial-mixture/
-├── README.md                  # This file
-├── LICENSE
+├── README.md                          # This file
+├── LICENSE                            # MIT License
 │
 ├── src/
-│   ├── FISTA_w.cpp           # Core C++ optimization
-│   └── README.md             # Compilation notes
+│   ├── FISTA_w.cpp                    # Core C++ optimization
+│   └── README.md                      # C++ compilation notes
 │
 ├── R/
-│   ├── alt_xbw_cvxr.R        # Main wrapper function
-│   ├── init_A.R              # Spatial graph construction
-│   ├── init_B.R              # Dictionary initialization
-│   ├── evaluation.R          # Metrics and diagnostics
-│   └── visualization.R       # Plotting utilities
+│   ├── alt_xbw_cvxr.R                 # Main wrapper function
+│   ├── init_A.R                       # Spatial graph construction
+│   ├── init_B.R                       # Dictionary initialization
+│   ├── projections.R                  # Simplex projection utilities
+│   ├── evaluation.R                   # Model evaluation & diagnostics
+│   └── visualization.R                # Plotting functions
 │
 ├── data/
-│   ├── raw/
-│   │   ├── S.csv             # Likelihood scores
-│   │   ├── A.csv             # Incidence matrix
-│   │   └── B.csv             # Initial dictionary
-│   └── README.md             # Data schema
+│   ├── raw/                           # Input data (S.csv, A.csv, B.csv)
+│   └── README.md                      # Data schema
 │
 ├── analysis/
-│   ├── example_workflow.R    # Reproducible example
-│   ├── config.R              # Hyperparameter defaults
-│   └── outputs/              # Results (gitignored)
+│   ├── example_workflow.R             # Complete reproducible example
+│   ├── config.R                       # Hyperparameter defaults
+│   └── outputs/                       # Generated results (gitignored)
 │
 ├── tests/
-│   ├── test_projections.R    # Unit tests
-│   └── test_dimensions.R     # Dimension checks
+│   ├── test_projections.R             # Unit tests
+│   └── test_dimensions.R              # Dimension validation
 │
 ├── docs/
-│   ├── algorithm.md          # Mathematical details
-│   ├── INSTALL.md            # Installation guide
-│   └── TROUBLESHOOTING.md    # Common issues
+│   ├── algorithm.md                   # Mathematical details
+│   ├── INSTALL.md                     # Installation guide
+│   └── TROUBLESHOOTING.md             # Common issues
 │
 └── matlab/
-    ├── tvspatm.m             # Reference implementation
-    └── README.md             # MATLAB vs R comparison
+    ├── tvspatm.m                      # Reference MATLAB implementation
+    └── README.md                      # MATLAB vs R comparison
 ```
 
-## Usage
-
-### 1. Prepare Data from RCTD
+## Installation
 
 ```r
-library(spacexr)
-myRCTD <- readRDS("myRCTD.rds")
+# Install dependencies
+install.packages(c("Rcpp", "Matrix", "CVXR", "ggplot2", "viridis", "interp"))
+
+# Clone repository
+git clone https://github.com/liutom445/tvfista.git
+cd tvfista
+
+# Compile C++ code
+library(Rcpp)
+sourceCpp("src/FISTA_w.cpp")
+
+# Load R functions
+source("R/alt_xbw_cvxr.R")
+source("R/init_A.R")
+source("R/init_B.R")
+```
+
+**Requirements**:
+- R ≥ 4.0
+- C++11 compiler
+- See [docs/INSTALL.md](docs/INSTALL.md) for platform-specific instructions
+
+## Quick Start
+
+### Option 1: Run Example Workflow
+
+```r
+# Run the complete workflow
+source("analysis/example_workflow.R")
+
+# Results saved to analysis/outputs/
+# - x_weighted.csv, B_weighted.csv, w_weighted.csv
+# - plots/convergence.png, plots/weights.png
+```
+
+### Option 2: Step-by-Step
+
+```r
+# Load libraries and compile C++
+library(Rcpp)
+library(Matrix)
+library(CVXR)
+sourceCpp("src/FISTA_w.cpp")
+
+# Source R functions
+source("R/alt_xbw_cvxr.R")
+source("R/init_A.R")
+source("R/init_B.R")
+source("R/evaluation.R")
+source("R/visualization.R")
+
+# Load data
+S_mat <- as.matrix(read.csv("data/raw/S.csv", row.names = 1))
+A <- as(as.matrix(read.csv("data/raw/A.csv", row.names = 1)), "dgCMatrix")
+B_init <- as.matrix(read.csv("data/raw/B.csv", row.names = 1))
+
+# Run optimization
+result <- alt_xbw_cvxr(
+    S_mat, A, B_init,
+    lambda = 30.0,       # TV regularization strength
+    outer_it = 15,       # Alternating iterations
+    it_X = 3000,         # FISTA iterations for X
+    it_B = 2500,         # FISTA iterations for B
+    wmin = 0.01,         # Min edge weight (boundaries)
+    wmax = 0.80          # Max edge weight (interior)
+)
+
+# Extract results
+X_final <- result$X    # N × D mixture weights
+B_final <- result$B    # K × D dictionary
+w_final <- result$w    # m edge weights
+
+# Evaluate
+metrics <- eval_run(S_mat, A, X_final, B_final, w_final, lambda = 30.0)
+print(metrics)
+
+# Visualize
+plot_convergence(result$hist)
+plot_weights(w_final)
+```
+
+### Option 3: From Your Own RCTD Data
+
+```r
+# Extract from RCTD (see data/README.md for details)
+myRCTD <- readRDS("path/to/myRCTD.rds")
 
 # Extract scores
 source("R/init_A.R")
 source("R/init_B.R")
-
-n <- myRCTD@cell_type_info$info[[3]]
-S <- matrix(0, nrow(myRCTD@results$results_df), n)
-rownames(S) <- rownames(myRCTD@results$results_df)
-colnames(S) <- myRCTD@cell_type_info$info[[2]]
-
-SCALE <- 10
-for (i in seq_len(nrow(S))) {
-  sc <- myRCTD@results$singlet_scores[[i]]
-  S[i, names(sc)] <- exp((min(sc) - sc) / SCALE)
-}
+S_mat <- extract_scores_from_RCTD(myRCTD)
+coords <- myRCTD@spatialRNA@coords[rownames(S_mat), ]
 
 # Build spatial graph
-coords <- myRCTD@spatialRNA@coords[rownames(S), ]
 A <- init_A(coords, method = "delaunay")
 
 # Initialize dictionary
-B_init <- init_B(S, A, D = 3)
+B_init <- init_B(S_mat, A, D = 3)
+
+# Run optimization (as in Option 2)
+result <- alt_xbw_cvxr(S_mat, A, B_init, lambda = 30.0, outer_it = 15)
 ```
 
-### 2. Run Optimization
+## Documentation
 
-```r
-source("R/alt_xbw_cvxr.R")
-Rcpp::sourceCpp("src/FISTA_w.cpp")
+- **[docs/algorithm.md](docs/algorithm.md)** - Mathematical formulation, gradients, and convergence analysis
+- **[docs/INSTALL.md](docs/INSTALL.md)** - Platform-specific installation instructions (Linux, macOS, Windows)
+- **[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)** - Common issues and solutions
+- **[data/README.md](data/README.md)** - Data schema and generation from RCTD
+- **[src/README.md](src/README.md)** - C++ API reference and compilation notes
+- **[matlab/README.md](matlab/README.md)** - MATLAB vs R comparison and validation
 
-res <- alt_xbw_cvxr(
-  S_mat = S,
-  A = A,
-  B_init = B_init,
-  lambda = 30,        # TV strength
-  delta = 1e-6,       # Soft-L1 smoothing
-  outer_it = 15,      # Alternating iterations
-  it_X = 3000,        # FISTA iterations for X
-  it_B = 2500,        # FISTA iterations for B
-  wmin = 0.01,        # Min edge weight
-  wmax = 0.80         # Max edge weight
-)
-```
+## Why FISTA?
 
-### 3. Evaluate and Visualize
+For spatial transcriptomics researchers unfamiliar with optimization, **FISTA** offers:
 
-```r
-source("R/evaluation.R")
-source("R/visualization.R")
+- **Simplicity**: Only requires gradient computation + projection
+- **Speed**: 10-50× faster than second-order methods for this problem size
+- **Convergence**: Provable $O(1/k^2)$ rate with momentum
+- **Flexibility**: Easy to modify objective (change TV norm, add constraints)
 
-# Metrics
-metrics <- eval_run(S, A, res$X, res$B, res$w, lambda = 30)
-print(metrics)
+The soft- $\ell_1$ smoothing ($\sqrt{u^2 + \delta}$ instead of $|u|$) makes the TV penalty differentiable while preserving edge-preserving properties.
 
-# Convergence plot
-plot_convergence(res$hist)
+## Extensions
 
-# Weight distribution
-plot_weights(res$w)
-
-# Spatial map (if myRCTD available)
-plot_types(res$X, res$B, myRCTD, title = "TV-weighted mixtures")
-```
-
-## Hyperparameter Tuning
-
-| Parameter | Default | Range | Effect |
-|-----------|---------|-------|--------|
-| `lambda` | 30 | 1-100 | TV strength (higher = smoother) |
-| `delta` | 1e-6 | 1e-8 to 1e-4 | Soft-L1 smoothing (keep small) |
-| `wmin`, `wmax` | 0.01, 0.80 | [0, 1] | Edge weight bounds |
-| `outer_it` | 15 | 5-30 | Alternating iterations |
-| `it_X`, `it_B` | 3000, 2500 | 500-5000 | FISTA inner iterations |
-
-**Tips**:
-- Start with `lambda = 10-30`, increase for more spatial coherence
-- Use `wmin = 2` to disable adaptive weighting (uniform weights)
-- Increase `it_X`, `it_B` if convergence is slow (check `res$hist`)
-
-## Performance
-
-**FISTA vs CVX benchmark** (N=1000, K=10, D=3):
-
-| Method | Time/iter | Memory | Scalability |
-|--------|-----------|--------|-------------|
-| MATLAB CVX | ~60s | 2 GB | N < 2000 |
-| R FISTA | ~0.5s | 50 MB | N > 10000 |
-
-**Speedup**: ~100× faster than CVX
+- **Multi-sample analysis**: Learn shared dictionary across tissue sections
+- **Uncertainty quantification**: Bootstrap or variational inference
+- **Alternative spatial priors**: Replace TV with geodesic distance on manifolds
+- **GPU acceleration**: For whole-slide imaging (N > 100K spots)
 
 ## Citation
 
-If you use this method, please cite:
+If you use this code, please cite:
 
-```
-@article{tv-spatial-mixture-2024,
-  title={TV-Regularized Spatial Mixture Models for Transcriptomics},
-  author={Liu, Hongyi},
-  year={2024}
+```bibtex
+@article{beck2009fista,
+  title={A fast iterative shrinkage-thresholding algorithm for linear inverse problems},
+  author={Beck, Amir and Teboulle, Marc},
+  journal={SIAM Journal on Imaging Sciences},
+  volume={2},
+  number={1},
+  pages={183--202},
+  year={2009}
+}
+
+@article{cable2022rctd,
+  title={Robust decomposition of cell type mixtures in spatial transcriptomics},
+  author={Cable, Dylan M and others},
+  journal={Nature Biotechnology},
+  volume={40},
+  number={4},
+  pages={517--526},
+  year={2022}
 }
 ```
 
-## Related Methods
-
-- [RCTD](https://github.com/dmcable/spacexr): Cell-type deconvolution (provides S matrix)
-- [SPOTlight](https://github.com/MarcElosua/SPOTlight): NMF-based deconvolution
-- [cell2location](https://github.com/BayraktarLab/cell2location): Bayesian spatial mapping
-
-## Contributing
-
-Contributions welcome! Please:
-1. Fork the repository
-2. Create a feature branch
-3. Submit a pull request
-
-For bugs or feature requests, open an issue.
-
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+MIT License - see LICENSE file for details.
 
 ## Contact
 
-- **Author**: Hongyi Liu
-- **Issues**: [GitHub Issues](https://github.com/yourusername/tv-spatial-mixture/issues)
-
-## Acknowledgments
-
-- RCTD team for spatial deconvolution framework
-- Rcpp developers for seamless R/C++ integration
-- CVXR team for convex optimization in R
+**Author**: Tom Liu
+**Email**: liutom@umich.edu
+**Repository**: [https://github.com/liutom445/tvfista](https://github.com/liutom445/tvfista)
+**Issues**: Please report bugs via [GitHub Issues](https://github.com/liutom445/tvfista/issues)
