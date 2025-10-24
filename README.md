@@ -14,7 +14,7 @@ This project performs **low-rank spatial deconvolution** of cell-type mixtures i
 - **Low-rank dictionary** ($B \in \mathbb{R}^{K \times D}$) capturing $D$ mixture archetypes from $K$ cell types
 - **Adaptive edge weights** ($w \in \mathbb{R}^m$) that identify tissue boundaries
 
-The key innovation: **soft-$\ell_1$ Total Variation** with learned edge weights automatically preserves sharp boundaries while smoothing within homogeneous regions.
+The key implementation: **soft - $\ell_1$ Total Variation** with learned edge weights automatically preserves sharp boundaries while smoothing within homogeneous regions.
 
 ## Method
 
