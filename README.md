@@ -27,7 +27,7 @@ $$
 where:
 - $z_i = \sum_k S_{ik}(XB^\top)_{ik}$ is the evidence at spot $i$
 - $A \in \mathbb{R}^{m \times N}$ is the spatial graph incidence matrix (Delaunay triangulation)
-- $\delta = 10^{-6}$ provides smooth approximation to $|\cdot|$
+- $\delta = 10^{-8}$ provides smooth approximation to $|\cdot|$
 
 **Constraints**: Rows of $X$ and columns of $B$ lie on the probability simplex ($\geq \epsilon$, sum to 1).
 
