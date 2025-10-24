@@ -38,7 +38,7 @@ We alternate three steps until convergence:
 1. **X-step (FISTA)**: Update mixture weights with TV regularization
    - Fast Iterative Shrinkage-Thresholding Algorithm (Beck & Teboulle 2009)
    - Convergence rate: $O(1/k^2)$ vs $O(1/k)$ for standard gradient descent
-   - 1500-2000 iterations, ~1.2 seconds
+   - 300-5000 iterations, ~6 seconds
 
 2. **B-step (FISTA)**: Update dictionary (data term only, no TV)
    - 500 iterations, ~0.5 seconds
